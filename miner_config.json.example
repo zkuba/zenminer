@@ -1,14 +1,28 @@
- {
-  "xmrig_path": "xmrig",
+{
+  "xmrig_path": "C:\\miners\\xmrig-6.24.0\\xmrig.exe",
   "pool": "pool.supportxmr.com:3333",
-  "wallet": "YOUR_WALLET_ADDRESS",
-  "xmrig_extra_args": "--donate-level=0 --no-huge-pages",
+  "wallet": "87QdreCSsmVC3s9SzctnPuMuEfupAivfdHCstLCKvQQiWtkhfoJFWH1fUMxu3am7Lh9eRHfKPVf5Gi5aKemLqBNpTEEc6oj",
+  "xmrig_extra_args": "--donate-level=0 --no-huge-pages --http-enabled --http-host=127.0.0.1 --http-port=3333",
   "high_threads": 4,
   "low_threads": 1,
-  "cpu_threshold_percent": 40,
+  "cpu_threshold_percent": 30,
   "idle_seconds_threshold": 30,
   "check_interval": 5,
   "http_host": "127.0.0.1",
-  "http_port": 5000,
-  "log_file": "zenminer.log"
+  "http_port": 5515,
+  "log_file": "zenminer.log",
+  "graceful_kill_wait": 6,
+  "xmrig_api_host": "127.0.0.1",
+  "xmrig_api_port": 3333,
+  "api_token": "",
+  "wallet_rotation": {
+    "enabled": true,
+    "interval_minutes": 2.0,
+    "min_interval_minutes": 0.5,
+    "mode": "sequential",
+    "wallets": [
+      "87QdreCSsmVC3s9SzctnPuMuEfupAivfdHCstLCKvQQiWtkhfoJFWH1fUMxu3am7Lh9eRHfKPVf5Gi5aKemLqBNpTEEc6oj"
+    ],
+    "apply_method": "restart"
+  }
 }
