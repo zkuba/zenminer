@@ -1,0 +1,14 @@
+ {
+  "xmrig_path": "xmrig",
+  "pool": "pool.supportxmr.com:3333",
+  "wallet": "YOUR_WALLET_ADDRESS",
+  "xmrig_extra_args": "--donate-level=0 --no-huge-pages",
+  "high_threads": 4,
+  "low_threads": 1,
+  "cpu_threshold_percent": 40,
+  "idle_seconds_threshold": 30,
+  "check_interval": 5,
+  "http_host": "127.0.0.1",
+  "http_port": 5000,
+  "log_file": "zenminer.log"
+}
