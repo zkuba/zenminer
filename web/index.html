@@ -1,0 +1,252 @@
+<!-- web/index.html - Simple ZenMiner Web UI (updated: shows countdown and runtime) -->
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ZenMiner - Web UI</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
+            margin: 18px;
+            background: #0f1720;
+            color: #e6eef8
+        }
+
+        .card {
+            background: #0b1220;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6)
+        }
+
+        button {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 0;
+            background: #2563eb;
+            color: white;
+            cursor: pointer
+        }
+
+        input,
+        textarea,
+        select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #21303f;
+            background: #07101a;
+            color: #e6eef8
+        }
+
+        label {
+            font-size: 13px;
+            display: block;
+            margin-bottom: 6px
+        }
+
+        pre {
+            white-space: pre-wrap;
+            background: #07101a;
+            padding: 10px;
+            border-radius: 6px;
+            overflow: auto
+        }
+
+        .row {
+            display: flex;
+            gap: 12px
+        }
+
+        .col {
+            flex: 1
+        }
+
+        .muted {
+            color: #9aa6b2;
+            font-size: 13px
+        }
+    </style>
+</head>
+
+<body>
+    <h2>ZenMiner — Web UI</h2>
+
+    <div class="card">
+        <strong>Status</strong>
+        <div id="statusContainer">Loading...</div>
+        <div style="margin-top:8px">
+            <button onclick="fetchStatus()">Refresh</button>
+            <button onclick="fetchRotation()">Rotation</button>
+            <button onclick="openWeb()">Open Web UI Window</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <strong>Rotation Info</strong>
+        <div id="rotationInfo">Loading...</div>
+    </div>
+
+    <div class="card">
+        <strong>Config (edit & save)</strong>
+        <div style="margin-top:8px">
+            <label>Raw JSON config (edit carefully)</label>
+            <textarea id="configJson" rows="10"></textarea>
+            <div style="margin-top:8px">
+                <button onclick="postConfig()">Save config</button>
+                <button onclick="applyConfig()">Apply (reload rotator)</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card row">
+        <div class="col">
+            <strong>Quick rotation</strong>
+            <div style="margin-top:8px">
+                <label>Dev fee %</label>
+                <input id="devFeeInput" type="number" min="0.1" step="0.1" />
+                <div style="margin-top:8px">
+                    <button onclick="quickSet()">Set & Apply</button>
+                    <button onclick="rotateNow()">Rotate now</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <strong>XMrig control</strong>
+            <div style="margin-top:8px">
+                <button onclick="startXmrig()">Start</button>
+                <button onclick="stopXmrig()">Stop</button>
+                <button onclick="restartXmrig()">Restart</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <strong>Logs / Raw status</strong>
+        <pre id="rawStatus">...</pre>
+    </div>
+
+    <script>
+        const base = "/";
+        let rotationIntervalHandle = null;
+
+        function formatSeconds(s) {
+            s = Math.max(0, Math.floor(s));
+            const hh = Math.floor(s / 3600);
+            const mm = Math.floor((s % 3600) / 60);
+            const ss = s % 60;
+            if (hh > 0) return `${hh}h ${mm}m ${ss}s`;
+            if (mm > 0) return `${mm}m ${ss}s`;
+            return `${ss}s`;
+        }
+
+        async function fetchStatus() {
+            try {
+                const r = await fetch(base + "status");
+                const j = await r.json();
+                const rs = j.rotation_status || {};
+                const runtime = rs.runtime_seconds || 0;
+                const next = rs.next_switch_in_seconds || 0;
+                const current = (rs.current) ? rs.current : (rs.current || "(unknown)");
+                const worker = (j.rotation_status && j.rotation_status.current === "dev") ? (j.rotation_status.username || "(dev)") : (j.config && j.config.worker_name ? j.config.worker_name : "zenminner");
+                document.getElementById("statusContainer").innerHTML = `
+                    <div>running: ${j.running}  pid: ${j.pid}  threads: ${j.threads}</div>
+                    <div>runtime_wallet: ${j.runtime_wallet || "(none)"}</div>
+                    <div>config.wallet: ${j.config && j.config.wallet ? j.config.wallet : "(none)"}</div>
+                    <div>worker (current mode): ${worker}</div>
+                    <div class="muted">version: ${j.app && j.app.version ? j.app.version : "(n/a)"}</div>
+                `;
+                document.getElementById("rotationInfo").innerHTML = `
+                    <div>mode: ${rs.current || "(unknown)"}</div>
+                    <div>next switch in: <strong>${formatSeconds(next)}</strong></div>
+                    <div>total runtime: <strong>${formatSeconds(runtime)}</strong></div>
+                    <div>dev_fee_percent: ${j.config && j.config.wallet_rotation ? j.config.wallet_rotation.dev_fee_percent : "(n/a)"}%</div>
+                    <div>cycle_minutes (computed): ${j.rotation_status && j.rotation_status.cycle_minutes ? j.rotation_status.cycle_minutes : "(n/a)"}</div>
+                `;
+                document.getElementById("rawStatus").textContent = JSON.stringify(j, null, 2);
+                try {
+                    const wr = j.config.wallet_rotation || {};
+                    document.getElementById("devFeeInput").value = wr.dev_fee_percent || 2;
+                    document.getElementById("configJson").value = JSON.stringify(j.config, null, 2);
+                } catch (e) { }
+            } catch (err) {
+                document.getElementById("statusContainer").textContent = "Error: " + err;
+            }
+        }
+
+        async function fetchRotation() {
+            try {
+                const r = await fetch(base + "rotation_status");
+                const j = await r.json();
+                alert("Rotation status:\\n" + JSON.stringify(j, null, 2));
+            } catch (e) { alert(e) }
+        }
+
+        async function postConfig() {
+            try {
+                const txt = document.getElementById("configJson").value;
+                const obj = JSON.parse(txt);
+                const r = await fetch(base + "config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) });
+                const j = await r.json();
+                if (!r.ok) throw new Error(JSON.stringify(j));
+                alert("Config saved");
+                fetchStatus();
+            } catch (err) {
+                alert("Error saving config: " + err);
+            }
+        }
+
+        async function applyConfig() {
+            try {
+                const r = await fetch(base + "apply_config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ "restart": false }) });
+                const j = await r.json();
+                alert("apply_config: " + JSON.stringify(j));
+                fetchStatus();
+            } catch (e) { alert(e) }
+        }
+
+        async function rotateNow() {
+            try {
+                const r = await fetch(base + "rotate_now", { method: "POST" });
+                const j = await r.json();
+                alert("rotate_now: " + JSON.stringify(j));
+                fetchStatus();
+            } catch (e) { alert(e) }
+        }
+
+        async function quickSet() {
+            try {
+                const dev = parseFloat(document.getElementById("devFeeInput").value);
+                const patch = { "wallet_rotation": { "dev_fee_percent": dev } };
+                const r = await fetch(base + "config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+                const j = await r.json();
+                if (!r.ok) throw new Error(JSON.stringify(j));
+                await fetch(base + "apply_config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ "restart": false }) });
+                alert("Quick set applied");
+                fetchStatus();
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        async function startXmrig() { await fetch(base + "start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }); fetchStatus() }
+        async function stopXmrig() { await fetch(base + "stop", { method: "POST" }); fetchStatus() }
+        async function restartXmrig() { await fetch(base + "restart", { method: "POST" }); fetchStatus() }
+
+        function openWeb() {
+            window.open("/ui/", "_blank");
+        }
+
+        window.onload = () => {
+            fetchStatus();
+            if (rotationIntervalHandle) clearInterval(rotationIntervalHandle);
+            rotationIntervalHandle = setInterval(fetchStatus, 5000);
+        };
+    </script>
+</body>
+
+</html>
