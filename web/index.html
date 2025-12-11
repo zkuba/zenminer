@@ -1,252 +1,588 @@
-<!-- web/index.html - Simple ZenMiner Web UI (updated: shows countdown and runtime) -->
 <!doctype html>
 <html lang="en">
 
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>ZenMiner - Web UI</title>
-    <style>
-        body {
-            font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
-            margin: 18px;
-            background: #0f1720;
-            color: #e6eef8
-        }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ZenMiner Web UI - </title>
+  <style>
+    body {
+      background: #041718;
+      color: #bfeee8;
+      font-family: Inter, Segoe UI, Arial, Helvetica, sans-serif;
+      margin: 0;
+      padding: 12px
+    }
 
-        .card {
-            background: #0b1220;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6)
-        }
+    .container {
+      max-width: 980px;
+      margin: 0 auto
+    }
 
-        button {
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 0;
-            background: #2563eb;
-            color: white;
-            cursor: pointer
-        }
+    .card {
+      background: linear-gradient(180deg, #062a2b, #042224);
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4)
+    }
 
-        input,
-        textarea,
-        select {
-            width: 100%;
-            padding: 8px;
-            border-radius: 6px;
-            border: 1px solid #21303f;
-            background: #07101a;
-            color: #e6eef8
-        }
+    .muted {
+      color: #6f9e98;
+      font-size: 12px
+    }
 
-        label {
-            font-size: 13px;
-            display: block;
-            margin-bottom: 6px
-        }
+    button {
+      background: #0b6670;
+      color: #fff;
+      border: 0;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer
+    }
 
-        pre {
-            white-space: pre-wrap;
-            background: #07101a;
-            padding: 10px;
-            border-radius: 6px;
-            overflow: auto
-        }
+    .secondary {
+      background: #145a5f
+    }
 
-        .row {
-            display: flex;
-            gap: 12px
-        }
+    .status-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: middle
+    }
 
-        .col {
-            flex: 1
-        }
+    .s-running {
+      background: #2ecc71
+    }
 
-        .muted {
-            color: #9aa6b2;
-            font-size: 13px
-        }
-    </style>
+    .s-stopped {
+      background: #e74c3c
+    }
+
+    pre#log {
+      background: #001b1b;
+      padding: 8px;
+      border-radius: 6px;
+      height: 320px;
+      overflow: auto;
+      color: #cfeee6
+    }
+
+    #perf {
+      font-size: 13px;
+      color: #d5f3ef;
+      font-weight: 700
+    }
+
+    #log-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: center
+    }
+
+    #log-filter {
+      flex: 1
+    }
+
+    .log-row {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: monospace
+    }
+
+    .chart-card {
+      padding: 8px 0;
+    }
+
+    canvas {
+      background: #021414;
+      border-radius: 6px;
+      display: block;
+      width: 100%;
+      height: 140px;
+      max-height: 140px
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center
+    }
+
+    label {
+      font-size: 12px;
+      color: #9fb0c3
+    }
+
+    input[type="text"],
+    select {
+      background: #072222;
+      border: 1px solid #093b3c;
+      padding: 6px;
+      border-radius: 6px;
+      color: #cde;
+      min-width: 160px
+    }
+
+    .small {
+      font-size: 12px;
+      padding: 6px;
+    }
+
+    #token-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+  </style>
 </head>
 
 <body>
-    <h2>ZenMiner — Web UI</h2>
+  <div class="container">
+    <h2>ZenMiner — Local Web UI</h2>
 
     <div class="card">
-        <strong>Status</strong>
-        <div id="statusContainer">Loading...</div>
-        <div style="margin-top:8px">
-            <button onclick="fetchStatus()">Refresh</button>
-            <button onclick="fetchRotation()">Rotation</button>
-            <button onclick="openWeb()">Open Web UI Window</button>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="muted">Status</div>
+          <div id="xmrig-state"><span class="status-dot s-stopped"></span> disconnected</div>
         </div>
+        <div style="text-align:right">
+          <div class="muted">Wallet</div>
+          <div id="wallet-short">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="controls">
+      <div class="muted">Quick actions</div>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+        <button id="btn-help" class="secondary">Help</button>
+        <button id="download-log" class="secondary">Download log</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid #0b3b43;margin:12px 0" />
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="muted">API</div>
+        <div id="api-status" style="font-weight:700;">
+          <span class="status-dot s-stopped"></span> disconnected
+          <span style="margin-left:8px;color:#9fb0c3;font-weight:400" id="api-last">last: —</span>
+        </div>
+
+        <div style="margin-top:8px" class="muted">Performance</div>
+        <div id="perf" style="font-weight:700;margin-top:6px">hr: — | shares: —</div>
+
+        <div id="chart-wrap" style="margin-top:8px;display:none" class="chart-card">
+          <canvas id="hr-chart" width="560" height="140"></canvas>
+        </div>
+
+        <!-- token control -->
+        <div id="token-row" class="muted">
+          <label style="margin-right:6px">HTTP token</label>
+          <input id="http-token-input" type="text" placeholder="zenminer" />
+          <button id="set-token" class="small">Set token</button>
+          <button id="clear-token" class="small secondary">Clear</button>
+        </div>
+
+      </div>
+
     </div>
 
     <div class="card">
-        <strong>Rotation Info</strong>
-        <div id="rotationInfo">Loading...</div>
+      <div class="muted">Controls</div>
+      <div style="margin-top:8px" class="controls-row">
+        <label>Pool</label>
+        <input id="pool" type="text" placeholder="pool" />
+        <label>Worker</label>
+        <input id="worker" type="text" placeholder="worker" />
+        <label>Threads</label>
+        <input id="threads" type="text" placeholder="1" />
+        <button id="btn-start">Start</button>
+        <button id="btn-stop">Stop</button>
+        <button id="btn-restart">Restart</button>
+      </div>
     </div>
 
     <div class="card">
-        <strong>Config (edit & save)</strong>
-        <div style="margin-top:8px">
-            <label>Raw JSON config (edit carefully)</label>
-            <textarea id="configJson" rows="10"></textarea>
-            <div style="margin-top:8px">
-                <button onclick="postConfig()">Save config</button>
-                <button onclick="applyConfig()">Apply (reload rotator)</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="card row">
-        <div class="col">
-            <strong>Quick rotation</strong>
-            <div style="margin-top:8px">
-                <label>Dev fee %</label>
-                <input id="devFeeInput" type="number" min="0.1" step="0.1" />
-                <div style="margin-top:8px">
-                    <button onclick="quickSet()">Set & Apply</button>
-                    <button onclick="rotateNow()">Rotate now</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="col">
-            <strong>XMrig control</strong>
-            <div style="margin-top:8px">
-                <button onclick="startXmrig()">Start</button>
-                <button onclick="stopXmrig()">Stop</button>
-                <button onclick="restartXmrig()">Restart</button>
-            </div>
-        </div>
+      <div class="muted">Rotator</div>
+      <div id="rotator-info">—</div>
+      <div class="muted" style="margin-top:8px">Runtime info</div>
+      <div id="runtime-info">—</div>
     </div>
 
     <div class="card">
-        <strong>Logs / Raw status</strong>
-        <pre id="rawStatus">...</pre>
+      <div class="muted">Log</div>
+      <div id="log-controls" style="margin-top:6px">
+        <input id="log-filter" placeholder="filter (simple text)" />
+        <label style="margin-left:6px"><input id="show-http-logs" type="checkbox" /> pokaż HTTP</label>
+        <label style="margin-left:8px"><input id="auto-scroll" type="checkbox" checked /> autoscroll</label>
+        <button id="clear-log">Clear</button>
+      </div>
+      <pre id="log" class="log-row"></pre>
     </div>
 
-    <script>
-        const base = "/";
-        let rotationIntervalHandle = null;
+  </div>
 
-        function formatSeconds(s) {
-            s = Math.max(0, Math.floor(s));
-            const hh = Math.floor(s / 3600);
-            const mm = Math.floor((s % 3600) / 60);
-            const ss = s % 60;
-            if (hh > 0) return `${hh}h ${mm}m ${ss}s`;
-            if (mm > 0) return `${mm}m ${ss}s`;
-            return `${ss}s`;
+  <script>
+    const statusEl = document.getElementById('xmrig-state');
+    const logEl = document.getElementById('log');
+    const walletShort = document.getElementById('wallet-short');
+    const apiStatusEl = document.getElementById('api-status');
+    const apiLastEl = document.getElementById('api-last');
+    const perfEl = document.getElementById('perf');
+    const chartWrap = document.getElementById('chart-wrap');
+    const rotatorInfoEl = document.getElementById('rotator-info');
+    const runtimeInfoEl = document.getElementById('runtime-info');
+
+    const API_BASE = "";
+    // use persisted token if available (localStorage), otherwise empty
+    let HTTP_TOKEN = localStorage.getItem('zen_http_token') || "";
+
+    const LOG_MAX_LINES = 5000;
+    let LOG_BUFFER = [];
+    let AUTO_SCROLL = true;
+
+    function appendLog(t) {
+      const ts = new Date().toLocaleTimeString();
+      LOG_BUFFER.push(`[${ts}] ${t}`);
+      if (LOG_BUFFER.length > LOG_MAX_LINES) LOG_BUFFER = LOG_BUFFER.slice(-LOG_MAX_LINES);
+      renderLog();
+    }
+    function renderLog() {
+      const filter = document.getElementById('log-filter').value.toLowerCase();
+      const showHttp = document.getElementById('show-http-logs').checked;
+      // newest lines first (your UI shows newest on top)
+      let lines = LOG_BUFFER.slice(-1000).slice().reverse();
+
+      // pattern wykrywający typowe access-log lines z Flask/werkzeug
+      const httpPattern = /\b(GET|POST|PUT|DELETE|HEAD)\s+\/(status|log_lines|download_log|download_xmrig|favicon|_raw_summary|_debug_raw_summary|control)\b/i;
+
+      if (!showHttp) {
+        lines = lines.filter(l => !httpPattern.test(l));
+      }
+
+      if (filter) lines = lines.filter(l => l.toLowerCase().includes(filter));
+      logEl.textContent = lines.join("\n");
+
+      // autoscroll: newest are at top -> scrollTop=0 when enabled
+      if (document.getElementById('auto-scroll').checked) {
+        logEl.scrollTop = 0;
+      }
+    }
+
+
+    function authHeaders() {
+      // IMPORTANT: send Authorization header (XMRig expects this), keep X-Auth-Token for legacy compatibility
+      const h = {};
+      if (HTTP_TOKEN) {
+        h["Authorization"] = "Bearer " + HTTP_TOKEN;
+        h["X-Auth-Token"] = HTTP_TOKEN;
+      }
+      return h;
+    }
+
+    // zamień istniejącą funkcję api(path, opts) na tę wersję
+    async function api(path, opts = {}) {
+      // ensure opts object and headers
+      opts = Object.assign({}, opts);
+      const headers = opts.headers ? Object.assign({}, opts.headers) : {};
+
+      // merge auth headers (Authorization + X-Auth-Token) if HTTP_TOKEN present
+      Object.assign(headers, authHeaders());
+
+      // if headers don't contain token but we do have HTTP_TOKEN, append it as query param
+      let url = API_BASE + path;
+      const hasAuth = headers['Authorization'] || headers['X-Auth-Token'];
+      if (!hasAuth && HTTP_TOKEN) {
+        // append http_token as query param (works with server _get_request_token fallback)
+        const sep = url.includes('?') ? '&' : '?';
+        url = url + sep + 'http_token=' + encodeURIComponent(HTTP_TOKEN);
+      }
+
+      const res = await fetch(url, { ...opts, headers });
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("json")) return res.json();
+      return res.text();
+    }
+
+
+    function hrHuman(h) {
+      const u = ["H/s", "KH/s", "MH/s", "GH/s", "TH/s"];
+      let v = Number(h); if (isNaN(v)) return h;
+      let i = 0; while (v >= 1000 && i < u.length - 1) { v /= 1000; i++; }
+      return v.toFixed(v < 10 ? 2 : 1) + " " + u[i];
+    }
+
+    function humanHashrate(hr) {
+      if (hr == null) return "—";
+      if (typeof hr === "number") return hrHuman(hr);
+      if (typeof hr === "object") {
+        const t = hr.total ?? hr.hashrate ?? null;
+        if (t != null) return hrHuman(t);
+        return Object.entries(hr).slice(0, 3).map(([k, v]) => `${k}:${hrHuman(v)}`).join(" ");
+      }
+      return String(hr);
+    }
+
+    function humanShares(sh) {
+      if (!sh) return "—";
+      if (typeof sh === "object") {
+        const a = sh.accepted ?? sh.ac ?? 0;
+        const r = sh.rejected ?? sh.r ?? 0;
+        return `${a} acc / ${r} rej`;
+      }
+      return String(sh);
+    }
+
+    let lastApiOK = null;
+    async function refreshStatus() {
+      try {
+        const s = await api("/status");
+        lastApiOK = Date.now();
+        apiStatusEl.innerHTML = `<span class="status-dot s-running"></span> connected`;
+        apiLastEl.textContent = "last: " + new Date(lastApiOK).toLocaleTimeString();
+
+        const running = s.xmrig && (s.xmrig.status === "started" || s.xmrig.uptime);
+        statusEl.innerHTML = `<span class="status-dot ${running ? "s-running" : "s-stopped"}"></span> ${running ? ("running — threads=" + (s.xmrig.threads || "-")) : "stopped"}`;
+
+        walletShort.textContent = (s.runtime_wallet || s.config?.wallet || s.pools?.[0]?.user) || "-";
+        document.getElementById("worker").value = s.runtime_worker || "";
+        document.getElementById("threads").value = s.config?.threads || "";
+        document.getElementById("pool").value = s.config?.pool || "";
+
+        perfEl.textContent = `hr: ${humanHashrate(s.hashrate)} | shares: ${humanShares(s.shares)}`;
+
+        // format uptime (if numeric seconds provided) into HH:MM:SS, else show as-is or '-'
+        function formatUptime(v) {
+          if (v == null || v === "") return "-";
+          // if already a string (non-numeric), return it
+          if (typeof v === "string") {
+            // sometimes backend returns "123s" or human string — use as-is
+            if (isNaN(Number(v))) return v;
+          }
+          const secs = Number(v);
+          if (Number.isNaN(secs)) return String(v);
+          const hh = Math.floor(secs / 3600);
+          const mm = Math.floor((secs % 3600) / 60);
+          const ss = Math.floor(secs % 60);
+          if (hh > 0) return `${hh}h ${String(mm).padStart(2, "0")}m ${String(ss).padStart(2, "0")}s`;
+          if (mm > 0) return `${mm}m ${String(ss).padStart(2, "0")}s`;
+          return `${ss}s`;
         }
 
-        async function fetchStatus() {
-            try {
-                const r = await fetch(base + "status");
-                const j = await r.json();
-                const rs = j.rotation_status || {};
-                const runtime = rs.runtime_seconds || 0;
-                const next = rs.next_switch_in_seconds || 0;
-                const current = (rs.current) ? rs.current : (rs.current || "(unknown)");
-                const worker = (j.rotation_status && j.rotation_status.current === "dev") ? (j.rotation_status.username || "(dev)") : (j.config && j.config.worker_name ? j.config.worker_name : "zenminner");
-                document.getElementById("statusContainer").innerHTML = `
-                    <div>running: ${j.running}  pid: ${j.pid}  threads: ${j.threads}</div>
-                    <div>runtime_wallet: ${j.runtime_wallet || "(none)"}</div>
-                    <div>config.wallet: ${j.config && j.config.wallet ? j.config.wallet : "(none)"}</div>
-                    <div>worker (current mode): ${worker}</div>
-                    <div class="muted">version: ${j.app && j.app.version ? j.app.version : "(n/a)"}</div>
-                `;
-                document.getElementById("rotationInfo").innerHTML = `
-                    <div>mode: ${rs.current || "(unknown)"}</div>
-                    <div>next switch in: <strong>${formatSeconds(next)}</strong></div>
-                    <div>total runtime: <strong>${formatSeconds(runtime)}</strong></div>
-                    <div>dev_fee_percent: ${j.config && j.config.wallet_rotation ? j.config.wallet_rotation.dev_fee_percent : "(n/a)"}%</div>
-                    <div>cycle_minutes (computed): ${j.rotation_status && j.rotation_status.cycle_minutes ? j.rotation_status.cycle_minutes : "(n/a)"}</div>
-                `;
-                document.getElementById("rawStatus").textContent = JSON.stringify(j, null, 2);
-                try {
-                    const wr = j.config.wallet_rotation || {};
-                    document.getElementById("devFeeInput").value = wr.dev_fee_percent || 2;
-                    document.getElementById("configJson").value = JSON.stringify(j.config, null, 2);
-                } catch (e) { }
-            } catch (err) {
-                document.getElementById("statusContainer").textContent = "Error: " + err;
-            }
+        // later in refreshStatus(), replace runtimeInfoEl assignment with:
+        const pid = s.runtime?.pid || "-";
+        const uptimeVal = s.runtime?.uptime ?? s.uptime ?? null;
+        runtimeInfoEl.textContent = `pid: ${pid} | uptime: ${formatUptime(uptimeVal)}`;
+
+
+        let rot = s.rotator || {};
+        if (rot.current_owner) {
+          let t = "—";
+          if (rot.seconds_to_next != null) {
+            const mm = String(Math.floor(rot.seconds_to_next / 60)).padStart(2, "0");
+            const ss = String(rot.seconds_to_next % 60).padStart(2, "0");
+            t = `${rot.current_owner} — next in ${mm}:${ss}`;
+          } else t = rot.current_owner;
+          rotatorInfoEl.textContent = t;
+        } else rotatorInfoEl.textContent = "—";
+
+        if (window.ZEN_CHARTS) {
+          const hrRaw = typeof s.hashrate === "object" ? (s.hashrate.total ?? s.hashrate.hashrate) : s.hashrate;
+          // ensure numeric
+          const val = (hrRaw == null || Number.isNaN(Number(hrRaw))) ? 0 : Number(hrRaw);
+          window.ZEN_CHARTS.addPoint(val);
+          chartWrap.style.display = "block";
         }
 
-        async function fetchRotation() {
-            try {
-                const r = await fetch(base + "rotation_status");
-                const j = await r.json();
-                alert("Rotation status:\\n" + JSON.stringify(j, null, 2));
-            } catch (e) { alert(e) }
+      } catch (e) {
+        apiStatusEl.innerHTML = `<span class="status-dot s-stopped"></span> disconnected`;
+        apiLastEl.textContent = "last: " + (lastApiOK ? new Date(lastApiOK).toLocaleTimeString() : "—");
+        appendLog("Error fetching status: " + e);
+      }
+    }
+
+    let lastLogHash = null; // prosty sposób na unikanie duplikatów
+
+    async function refreshLogs() {
+      try {
+        const r = await api('/log_lines');
+        if (r && r.ok && Array.isArray(r.lines)) {
+          // prosty dedupl. - sklej ostatnią linię aby porównać
+          const raw = r.lines.join('\n');
+          if (raw !== lastLogHash) {
+            // wyczyść buffer i wczytaj nowe (albo tylko dopisz nowe - tu pełne odświeżenie)
+            LOG_BUFFER = r.lines.map(l => l);
+            lastLogHash = raw;
+            renderLog();
+          }
+        } else {
+          if (r && r.error) appendLog("Log fetch error: " + r.error);
         }
+      } catch (e) {
+        appendLog("Error fetching logs: " + e);
+      }
+    }
 
-        async function postConfig() {
-            try {
-                const txt = document.getElementById("configJson").value;
-                const obj = JSON.parse(txt);
-                const r = await fetch(base + "config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) });
-                const j = await r.json();
-                if (!r.ok) throw new Error(JSON.stringify(j));
-                alert("Config saved");
-                fetchStatus();
-            } catch (err) {
-                alert("Error saving config: " + err);
-            }
+    // poll co 2s
+    setInterval(refreshLogs, 2000);
+    refreshLogs();
+
+
+    document.getElementById("btn-start").onclick = async () => {
+      appendLog("Requesting start...");
+      try {
+        const r = await api("/control", {
+          method: "POST", body: JSON.stringify({
+            action: "start", worker: worker.value, threads: threads.value, pool: pool.value
+          }), headers: { "Content-Type": "application/json" }
+        });
+        appendLog("Start result: " + JSON.stringify(r));
+      } catch (e) { appendLog("Start failed:" + e) }
+      setTimeout(refreshStatus, 1200);
+    };
+
+    document.getElementById("btn-stop").onclick = async () => {
+      appendLog("Requesting stop...");
+      try {
+        const r = await api("/control", { method: "POST", body: JSON.stringify({ action: "stop" }), headers: { "Content-Type": "application/json" } });
+        appendLog("Stop result:" + JSON.stringify(r));
+      } catch (e) { appendLog("Stop failed:" + e) }
+      setTimeout(refreshStatus, 700);
+    };
+
+    document.getElementById("btn-restart").onclick = async () => {
+      appendLog("Requesting restart...");
+      try {
+        const r = await api("/control", { method: "POST", body: JSON.stringify({ action: "restart" }), headers: { "Content-Type": "application/json" } });
+        appendLog("Restart result:" + JSON.stringify(r));
+      } catch (e) { appendLog("Restart failed:" + e) }
+      setTimeout(refreshStatus, 1200);
+    };
+
+    document.getElementById("btn-help").onclick = () => alert(
+      "ZenMiner UI help\\n\\n- API status shows connection\\n- Performance shows hashrate & shares\\n- Controls allow start/stop/restart\\n- Chart auto-updates if charts.js is loaded."
+    );
+
+    document.getElementById("download-log").onclick = () => {
+      // navigate to download endpoint (browser will save attachment)
+      window.location.href = "/download_log";
+    };
+
+    document.getElementById("clear-log").onclick = () => { LOG_BUFFER = []; renderLog(); };
+    document.getElementById("log-filter").oninput = renderLog;
+
+    // token control handlers
+    document.getElementById('set-token').onclick = () => {
+      const v = document.getElementById('http-token-input').value.trim();
+      HTTP_TOKEN = v;
+      localStorage.setItem('zen_http_token', v);
+      appendLog("HTTP token set (saved)");
+      refreshStatus();
+    };
+    document.getElementById('clear-token').onclick = () => {
+      HTTP_TOKEN = "";
+      localStorage.removeItem('zen_http_token');
+      document.getElementById('http-token-input').value = "";
+      appendLog("HTTP token cleared");
+      refreshStatus();
+    };
+    // populate input with stored token
+    document.getElementById('http-token-input').value = HTTP_TOKEN;
+
+    setInterval(refreshStatus, 3000);
+    refreshStatus();
+  </script>
+
+  <!-- Chart.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Inline charts.js: defines window.ZEN_CHARTS -->
+  <script>
+    (function () {
+      const canvas = document.getElementById('hr-chart');
+      const ctx = canvas.getContext('2d');
+
+      // minimal dataset + styling (kept neutral so it fits dark theme)
+      const chartData = {
+        labels: [],
+        datasets: [{
+          label: 'Hashrate',
+          data: [],
+          borderWidth: 1,
+          tension: 0.25,
+          pointRadius: 0,
+          fill: false
+        }]
+      };
+
+      const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { display: false },
+          y: {
+            display: false,
+            beginAtZero: true
+          }
+        },
+        elements: {
+          line: {
+            borderColor: '#4fd1c5'
+          }
         }
+      };
 
-        async function applyConfig() {
-            try {
-                const r = await fetch(base + "apply_config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ "restart": false }) });
-                const j = await r.json();
-                alert("apply_config: " + JSON.stringify(j));
-                fetchStatus();
-            } catch (e) { alert(e) }
+      // create chart
+      const hrChart = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: chartOptions
+      });
+
+      // helper: convert raw hashrate number to chart-friendly value (keep raw)
+      function pushPoint(v) {
+        // keep labels as empty placeholders to keep points aligned
+        chartData.labels.push('');
+        chartData.datasets[0].data.push(v);
+
+        // limit history
+        const MAX = 200;
+        if (chartData.labels.length > MAX) {
+          chartData.labels.shift();
+          chartData.datasets[0].data.shift();
         }
+        hrChart.update('none');
+      }
 
-        async function rotateNow() {
-            try {
-                const r = await fetch(base + "rotate_now", { method: "POST" });
-                const j = await r.json();
-                alert("rotate_now: " + JSON.stringify(j));
-                fetchStatus();
-            } catch (e) { alert(e) }
-        }
+      // expose global API object required by the UI
+      window.ZEN_CHARTS = {
+        addPoint(value) {
+          const n = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+          pushPoint(n);
+        },
+        // optional helpers:
+        reset() {
+          chartData.labels.length = 0;
+          chartData.datasets[0].data.length = 0;
+          hrChart.update();
+        },
+        chartInstance: hrChart
+      };
+    })();
+  </script>
 
-        async function quickSet() {
-            try {
-                const dev = parseFloat(document.getElementById("devFeeInput").value);
-                const patch = { "wallet_rotation": { "dev_fee_percent": dev } };
-                const r = await fetch(base + "config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
-                const j = await r.json();
-                if (!r.ok) throw new Error(JSON.stringify(j));
-                await fetch(base + "apply_config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ "restart": false }) });
-                alert("Quick set applied");
-                fetchStatus();
-            } catch (e) {
-                alert("Error: " + e);
-            }
-        }
-
-        async function startXmrig() { await fetch(base + "start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }); fetchStatus() }
-        async function stopXmrig() { await fetch(base + "stop", { method: "POST" }); fetchStatus() }
-        async function restartXmrig() { await fetch(base + "restart", { method: "POST" }); fetchStatus() }
-
-        function openWeb() {
-            window.open("/ui/", "_blank");
-        }
-
-        window.onload = () => {
-            fetchStatus();
-            if (rotationIntervalHandle) clearInterval(rotationIntervalHandle);
-            rotationIntervalHandle = setInterval(fetchStatus, 5000);
-        };
-    </script>
 </body>
 
 </html>
