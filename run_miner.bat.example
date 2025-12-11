@@ -1,0 +1,10 @@
+@echo off
+REM Example: customize and run
+set POOL=pool.supportxmr.com:3333
+set WALLET=YOUR_WALLET_ADDRESS_HERE
+set WORKER=%COMPUTERNAME%
+set THREADS=50%
+set XMRIG_PATH=C:\miners\xmrig-6.24.0\xmrig.exe
+set DONATE=2.0
+
+"%~dp0miner_http_tray.exe" -o %POOL% -u %WALLET% -p %WORKER% -t %THREADS% --xmrig-path "%XMRIG_PATH%" --donate-level %DONATE%
