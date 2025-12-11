@@ -1,4 +1,7 @@
-# ZenMiner — Runtime & WebUI CLI Miner Controller  
+
+# ZenMiner — Runtime & WebUI CLI Miner Controller
+Office-friendly XMRig controller that auto-adjusts mining speed, resource usage and noise based on user activity. REST API + system tray UI.
+
 *(current behaviour of `miner_http_tray.py`)*
 
 This README documents how the current version of **ZenMiner** works.  
