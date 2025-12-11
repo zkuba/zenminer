@@ -1,129 +1,200 @@
-# ZenMiner
+# ZenMiner — kontroler XMRig (CLI + Web UI)  
+*(aktualne zachowanie `miner_http_tray.py`)*
 
-⚠️ **Uwaga — Windows Defender / antywirus**  
-Windows Defender oraz inne programy antywirusowe często oznaczają aplikacje zarządzające minerami (takie jak ZenMiner) jako podejrzane — to zwykle *false positive*. Projekt **nie** dołącza binarki XMRig do release — użytkownik pobiera ją samodzielnie.  
-Jeśli Windows Defender przeniesie do kwarantanny lub usunie `ZenMiner.exe`, skorzystaj z instrukcji w sekcji „Rozwiązywanie problemów” aby przywrócić plik i dodać wyjątek dla folderu.
-
----
-
-**ZenMiner** — lekki manager XMRig dla Windows z adaptacyjną kontrolą wątków CPU, rotacją walletów (user/dev), Web UI i ikoną w trayu.
-
-## Wersja
-Wersja pobierana jest z GIT (`git describe`) lub z pliku `VERSION`.  
-Aktualna wersja: **0.1.0** (zaktualizuj przed release).
+Ten dokument opisuje **rzeczywistą**, aktualną funkcjonalność ZenMiner.  
+Poprzednie README mówiły o konfiguracji JSON — ta wersja aplikacji działa w oparciu o **parametry CLI** oraz **Web UI**.  
+Opis poniżej odpowiada dokładnie temu, co robi obecny kod Python.
 
 ---
 
-## Najważniejsze funkcje
-- Rotacja walletów: Zawsze zaczyna od **walletem użytkownika**, okresowo przełącza na stały **dev wallet** (dev-fee).
-- Dev wallet jest zablokowany i **niemodyfikowalny** w runtime (nie można zmieniać przez API/UI).
-- AdaptiveThreadController — 3 stany:
-  - `active` → mniej wątków
-  - `idle` → więcej wątków
-  - `logged_out` (zablokowany ekran) → stop lub konfiguracja
-  - Wykrywanie aktywności przez `GetLastInputInfo` i sprawdzenie stanu sesji.
-- Preferowane użycie XMRig HTTP API dla płynnych zmian; restart jako fallback.
-- Web UI (Flask) oraz tray (pystray).
-- Rotacja logów (RotatingFileHandler).
-- Nazwa workera:
-  - user period → `worker_name` z config lub `zenminner`
-  - dev period  → `user_<8hex>_v<version>` (zahashowany + wersja)
+# 📌 Co robi ZenMiner?
+
+ZenMiner:
+
+- uruchamia **XMRig** z określonym zestawem parametrów  
+- **automatycznie dostosowuje liczbę wątków** w zależności od aktywności użytkownika:
+  - **active** — minimalne obciążenie  
+  - **idle** — średnie  
+  - **logged_out / locked** — maksymalne  
+- rotuje pomiędzy:
+  - **portfelem użytkownika**  
+  - **stałym portfelem dev-fee** (w kodzie)  
+- zapewnia **Web UI** umożliwiające:
+  - podgląd hashrate  
+  - sprawdzanie uptime  
+  - zmianę liczby wątków  
+  - przegląd logów  
+  - start/stop/restart XMRig  
+- zapisuje logi w katalogu `logs/`  
+- próbuje zmieniać konfigurację XMRig przez **HTTP API**, a jeśli API zawiedzie — restartuje XMRig.
 
 ---
 
-## Polityka dystrybucji — WAŻNE
-- **Nie dołączaj** `xmrig.exe` do publicznego release. Użytkownik ma sam pobrać XMRig z oficjalnego repo (link w README).
-- W paczce powinien znaleźć się `miner_config.json.example`. Użytkownik kopiuje go do `miner_config.json` i ustawia `xmrig_path` oraz `wallet`.
-- Dołącz SHA256 EXE w notce release, aby użytkownicy mogli zweryfikować plik.
+# 🚀 Szybki start
 
----
+## Wymagania
+- Windows (zalecane) lub Linux  
+- XMRig (nie jest dołączony — użytkownik podaje pełną ścieżkę)
 
-## Szybki start (EXE)
-1. Pobierz ZIP z GitHub Releases.
-2. Rozpakuj do folderu (np. `C:\ProgramData\ZenMiner`).
-3. Skopiuj `miner_config.json.example` → `miner_config.json`.
-4. W `miner_config.json` ustaw:
-   - `"wallet"` — Twój adres.
-   - `"xmrig_path"` — preferowana pełna ścieżka do pliku `xmrig.exe`, np. `"C:\\miners\\xmrig-6.24.0\\xmrig.exe"`, lub `"xmrig.exe"` jeżeli umieścisz xmrig obok `ZenMiner.exe`.
-5. Uruchom `ZenMiner.exe`.
-6. Web UI: <http://127.0.0.1:5515/ui/>
-
----
-
-## Uruchomienie z kodu (dla dev)
-1. Utwórz virtualenv i zainstaluj:
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-   ```
-2. Uruchom:
-   ```powershell
-   python miner_http_tray.py
-   ```
-
----
-
-## Budowa EXE (PyInstaller)
-Użyj `build.ps1` w repo (zalecane). Automatycznie zbuduje EXE i zapakuje ZIP w `release/`.
-
-Ręcznie:
+## Przykład uruchomienia
 ```powershell
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install pyinstaller
-.\.venv\Scripts\pyinstaller.exe --noconfirm --clean --onefile --name ZenMiner-0.1.0 --add-data "web;web" --add-data "miner_config.json.example;." miner_http_tray.py
+ZenMiner.exe `
+  --xmrig-path "C:\miners\xmrig\xmrig.exe" `
+  -u TWÓJ_WALLET `
+  -t "1,2,4" `
+  --http-port 5515 `
+  --http-token zenminer
 ```
 
 ---
 
-## Konfiguracja (ważne pola)
-Przykład `miner_config.json`:
-```json
-"xmrig_path": "C:\\miners\\xmrig-6.24.0\\xmrig.exe",
-"pool": "pool.supportxmr.com:3333",
-"wallet": "TWÓJ_WALLET",
-"worker_name": "",
-"active_threads": 1,
-"idle_threads": 4,
-"logged_out_threads": 0,
-"idle_threshold_seconds": 300,
-"logged_out_threshold_seconds": 1800
+# ⚙️ Parametry CLI
+
+## Wymagane
+| Parametr | Opis |
+|----------|------|
+| `--xmrig-path` | Pełna ścieżka do `xmrig.exe` |
+| `-u, --wallet` | Adres portfela użytkownika |
+
+## Najważniejsze opcje
+| Parametr | Opis |
+|----------|------|
+| `-o, --pool` | Adres poola (host:port) |
+| `-p, --worker` | Nazwa workera (domyślnie `%COMPUTERNAME%`) |
+| `-t, --threads` | Specyfikacja wątków (active,idle,logged_out) |
+| `--tp` | Czas trwania cyklu rotatora (minuty) |
+| `--donate-level` | Procent dev-fee w cyklu |
+| `--xmrig-http-port` | Port API XMRig (domyślnie 18080) |
+| `--http-port` | Port Web UI (domyślnie 5515) |
+| `--http-token` | Token dla Web UI i XMRig API |
+| `--no-tray` | Bez ikony w trayu |
+| `--http-debug` | Więcej logów HTTP |
+
+---
+
+# 🧮 Specyfikacja wątków (`--threads`)
+
+## Tryb liczbowy
 ```
-Uwaga:
-- `xmrig_path` powinien wskazywać na plik wykonywalny `xmrig.exe`. Można też ustawić `"xmrig.exe"` i położyć plik obok `ZenMiner.exe`.
+-t "1,2,4"
+```
+Kolejność:
+1. active  
+2. idle  
+3. logged_out
+
+## Tryb procentowy
+```
+-t "25%,50%,100%"
+```
+
+### Jak działają procenty?
+- `25%` → 0.25  
+- ZenMiner mnoży to przez **liczbę logicznych CPU** (`multiprocessing.cpu_count()`)
+
+Przykład dla CPU z **16 logicznymi wątkami**:
+
+| Procent | Wynik |
+|---------|--------|
+| 25% | 4 wątki |
+| 50% | 8 wątków |
+| 100% | 16 wątków |
+
+### Uwaga na pliki `.bat` (Windows CMD)
+`%` trzeba podwoić:
+
+```
+ZenMiner.exe -t "25%%,50%%,100%%"
+```
+
+W PowerShell NIE trzeba podwajać.
 
 ---
 
-## Rozwiązywanie problemów / Windows Defender
-Jeżeli Defender kwarantannuje plik:
-1. Otwórz **Windows Security** → **Virus & threat protection** → **Protection history**.
-2. Znajdź wpis → **Restore** / **Allow on device**.
-3. Dodaj wyjątek (Exclusion) dla folderu z ZenMiner:
-   - GUI: Virus & threat protection → Manage settings → Exclusions → Add an exclusion → Folder
-   - PowerShell (admin):
-     ```powershell
-     Add-MpPreference -ExclusionPath "C:\path\to\ZenMiner_folder"
-     ```
+# 🌐 Web UI i API
+
+### Adres Web UI
+```
+http://127.0.0.1:<http-port>/
+```
+
+### Autoryzacja
+Jeśli ustawiono token:
+
+- `X-Auth-Token: <token>`  
+- lub `Authorization: Bearer <token>`  
+- lub `?token=<token>` w URL  
+
+### Endpoints
+| Method | Path | Opis |
+|--------|-------|------|
+| `GET /status` | status XMRig (uptime, threads, wallet, hashrate) |
+| `POST /control` | start / stop / restart / set_threads / rotate_now |
+| `GET /log_lines` | ostatnie N linii logów |
+| `GET /download_log` | pobranie logu aplikacji |
+| `GET /download_xmrig` | pobranie logów XMRig |
 
 ---
 
-## Checklist przed publikacją
-- [ ] Uaktualnij `VERSION`.
-- [ ] Zbuduj EXE i utwórz ZIP z `ZenMiner.exe`, `miner_config.json.example`, `README.md`, `README_PL.md`, `web/`.
-- [ ] Nie dołączaj `xmrig.exe` w publicznym release.
-- [ ] Oblicz SHA256 EXE i umieść w notce release.
-- [ ] Przetestuj EXE na czystej maszynie/VM.
-- [ ] Dodaj instrukcję dotyczącą Defender w README.
+# 🔁 Rotator portfeli (dev-fee)
+
+- Przełącza pomiędzy **portfelem użytkownika** i **portfelem dev-fee** (zaszytym w kodzie)  
+- Najpierw próbuje zmienić konfigurację przez **XMRig API**  
+- Jeśli to się nie uda → restartuje XMRig  
+- Worker podczas dev-fee jest automatycznie generowany:
+  ```
+  <sha256(wallet)[:8]>_<wersja_aplikacji>
+  ```
 
 ---
 
-## Bezpieczeństwo / etyka
-- ZenMiner nie zapisuje prywatnych kluczy — `wallet` to tylko adres.
-- Dev wallet jest stały i niezmienialny przez API.
-- Przejrzystość: informuj użytkowników w release, co robi oprogramowanie.
+# 📁 Logi
+
+### Log aplikacji (rotowany)
+```
+logs/zenminer.log
+```
+Parametry rotacji:
+- max 5 MB  
+- 5 kopii zapasowych  
+
+### Logi XMRig
+```
+logs/xmrig_stdout.log
+logs/xmrig_stderr.log
+```
+Dostępne do pobrania z Web UI.
 
 ---
 
-## Contributing
-Zgłoszenia i PRy mile widziane. Proszę o szczegóły błędu (OS, logi `zenminer.log`, wersja).
+# 🔄 Restart XMRig
+ZenMiner próbuje ustawić portfel/wątki poprzez:
+```
+PUT /1/config
+```
+Jeśli API nie odpowiada lub zgłasza błąd → wykonywany jest **restart XMRig**.
+
+---
+
+# 🧩 Obsługa workera
+
+- Worker użytkownika = wartość z `--worker`  
+- Worker dev-fee = automatycznie generowany (hash + wersja)  
+- Po udanej zmianie przez API worker jest zapisywany w stanie aplikacji, aby restart XMRig uruchomił go z poprawną wartością.
+
+---
+
+# ❗ Informacja o starym README
+Starsze wersje opisywały system konfiguracji *JSON*.  
+Aktualna wersja ZenMiner działa wyłącznie na:
+
+- parametrach CLI  
+- Web UI  
+- API runtime  
+
+JSON nie jest już elementem standardowego workflow.
+
+---
+
+# 📜 Licencja
+MIT / zgodnie z plikiem licencji w repozytorium.
