@@ -1,0 +1,60 @@
+@echo off
+REM ================================================================
+REM ZenMiner Example Launcher (run_miner.bat.example)
+REM ================================================================
+REM This script shows how to run ZenMiner with your own parameters.
+REM Copy this file to run_miner.bat and edit values as needed.
+REM ================================================================
+
+REM === POOL SETTINGS ==============================================
+REM Full pool address in host:port format.
+set POOL=pool.supportxmr.com:3333
+
+REM === WALLET SETTINGS ============================================
+REM Replace with your real Monero wallet address.
+REM To test dev mode, you may temporarily set WALLET=dev
+set WALLET=YOUR_WALLET_ADDRESS_HERE
+
+REM === WORKER NAME ================================================
+REM Default worker name is the computer name.
+REM You can override it here.
+set WORKER=%COMPUTERNAME%
+
+REM === THREADS CONFIG ==============================================
+REM Hybrid threads spec (active,idle,logged_out).
+REM - You can use integers: 1,2,4
+REM - Or percentage: 25%%,50%%,100%%
+REM - If you give only one value: 50%% → applies to all states
+set THREADS=10%%,20%%,100%%
+
+REM === PATH TO XMRIG ==============================================
+REM Path to xmrig.exe (required).
+REM Make sure to keep quotes if the path contains spaces.
+set XMRIG_PATH=xmrig.exe
+
+REM === DEV-FEE LEVEL ==============================================
+REM Percent of time allocated to dev wallet (1–100).
+REM This is used by the rotator logic inside ZenMiner.
+set DONATE=10.0
+
+REM === WEB UI SECURITY ============================================
+REM Optional: set a token for Web UI and XMRig HTTP API
+set TOKEN=zenminer
+
+REM ================================================================
+REM === RUN ZENMINER ===============================================
+REM ================================================================
+
+"ZenMiner-0.2.0.exe" ^
+    -o %POOL% ^
+    -u %WALLET% ^
+    -p %WORKER% ^
+    -t %THREADS% ^
+    --xmrig-path "%XMRIG_PATH%" ^
+    --donate-level %DONATE% ^
+    --http-token %TOKEN%
+
+pause
+
+#one line example:
+#ZenMiner-0.2.0.exe -o pool.supportxmr.com:3333 -u 87QdreCSsmVC3s9SzctnPuMuEfupAivfdHCstLCKvQQiWtkhfoJFWH1fUMxu3am7Lh9eRHfKPVf5Gi5aKemLqBNpTEEc6oj -p Rig1 -t 1,2,4 --xmrig-path "xmrig.exe" --donate-level 10.0 --http-token zenminer --http-port 5515 --http-port-xmrig 18080

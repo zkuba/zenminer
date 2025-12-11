@@ -57,3 +57,65 @@ xmrig.exe
 ########################################
 *.tmp
 *.bak
+
+# Python & env & IDE
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.python-version
+*.egg-info/
+dist/
+build/
+*.dist/
+*.onefile-build/
+*.spec
+*.spec.*
+*.egg
+.eggs/
+*.whl
+
+# test / coverage
+.coverage
+.cache
+.pytest_cache/
+.hypothesis/
+templates
+tests
+scr
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs & runtime artifacts
+logs/
+*.log
+*.out
+*.err
+
+# packaging / build outputs and installers
+*.zip
+*.tar.gz
+*.exe
+*.msi
+
+# local/run scripts / temp
+run_miner.bat
+CHECKSUMS.txt
+README.txt
+build_nuitka.ps1
+miner_http_tray_cli_only.dist/
+miner_http_tray_cli_only.build/
+miner_http_tray_cli_only.onefile-build/
+miner_http_tray.exe
+zenminer.spec
+miner_http_tray.spec
